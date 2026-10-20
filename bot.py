@@ -1,5 +1,6 @@
 import os
 import requests
+import asyncio
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from flask import Flask
@@ -9,7 +10,6 @@ from threading import Thread
 TOKEN = "8550226144:AAFlJ3-Twt_pVVmGC348fIVjp2XiUpzWE7c"
 # =====================
 
-# Mini servidor web para evitar que el hosting apague el bot
 app_web = Flask(__name__)
 @app_web.route('/')
 def home():
@@ -17,26 +17,23 @@ def home():
 
 def iniciar_servidor():
     puerto = int(os.environ.get("PORT", 8080))
-    app_web.run(host="0.0.0.0", port=puerto)
+    app_web.run(host="0.0.0.0", port=puerto, use_reloader=False)
 
 def mantener_vivo():
     hilo = Thread(target=iniciar_servidor)
     hilo.daemon = True
     hilo.start()
 
-# Lógica del bot
 def obtener_tasa_bcv():
     try:
         url = "https://pydolarvenezuela-api.vercel.app/api/v1/dollar/page?page=bcv"
         respuesta = requests.get(url)
-        datos = respuesta.json()
-        return float(datos['monedas']['usd']['price'])
-    except Exception as e:
+        return float(respuesta.json()['monedas']['usd']['price'])
+    except Exception:
         return None
 
 def formato_venezolano(numero, decimales=2):
-    formato = f"{numero:,.{decimales}f}"
-    return formato.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{numero:,.{decimales}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip().replace(',', '.')
@@ -62,7 +59,16 @@ async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(mensaje)
 
 def main():
-    mantener_vivo() # Arranca el servidor web en segundo plano
+    mantener_vivo()
+    
+    # --- Solución al error de Asyncio en Render ---
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    # ----------------------------------------------
+    
     app = Application.builder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_mensaje))
     app.run_polling()
