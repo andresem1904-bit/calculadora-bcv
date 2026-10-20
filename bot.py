@@ -26,9 +26,11 @@ def mantener_vivo():
 
 def obtener_tasa_bcv():
     try:
-        url = "https://pydolarvenezuela-api.vercel.app/api/v1/dollar/page?page=bcv"
+        # Usamos DolarApi, una fuente mucho más estable
+        url = "https://ve.dolarapi.com/v1/dolares/oficial"
         respuesta = requests.get(url)
-        return float(respuesta.json()['monedas']['usd']['price'])
+        datos = respuesta.json()
+        return float(datos['promedio'])
     except Exception:
         return None
 
@@ -61,13 +63,11 @@ async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     mantener_vivo()
     
-    # --- Solución al error de Asyncio en Render ---
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    # ----------------------------------------------
     
     app = Application.builder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_mensaje))
