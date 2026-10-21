@@ -26,11 +26,11 @@ def mantener_vivo():
 
 def obtener_tasa_bcv():
     try:
-        # Usamos DolarApi, una fuente mucho más estable
-        url = "https://ve.dolarapi.com/v1/dolares/oficial"
+        # Usamos la API estática de DolarVZLA
+        url = "https://rates.dolarvzla.com/bcv/current.json"
         respuesta = requests.get(url)
         datos = respuesta.json()
-        return float(datos['promedio'])
+        return float(datos['current']['usd'])
     except Exception:
         return None
 
