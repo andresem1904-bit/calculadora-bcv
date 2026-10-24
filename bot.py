@@ -13,7 +13,7 @@ TOKEN = "8550226144:AAFlJ3-Twt_pVVmGC348fIVjp2XiUpzWE7c"
 app_web = Flask(__name__)
 @app_web.route('/')
 def home():
-    return "El bot del BCV y Binance Avanzado está funcionando 24/7."
+    return "El bot del BCV y Binance (Compra/Venta) está funcionando 24/7."
 
 def iniciar_servidor():
     puerto = int(os.environ.get("PORT", 8080))
@@ -33,7 +33,7 @@ def obtener_tasa_bcv():
         return None
 
 def buscar_anuncio_binance(monto_fiat, tipo_operacion):
-    """Busca directamente en Binance filtrando por monto"""
+    """Busca directamente en Binance filtrando por el monto exacto de Bs"""
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     headers = {
         "Content-Type": "application/json",
@@ -69,7 +69,7 @@ def buscar_anuncio_binance(monto_fiat, tipo_operacion):
 def formato_venezolano(numero, decimales=2):
     return f"{numero:,.{decimales}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- CALCULADORA BCV ---
+# --- CALCULADORA BCV (Mensajes normales sin comando) ---
 async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip().replace(',', '.')
     try:
@@ -93,45 +93,10 @@ async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /usdt (Vendes tus USDT para obtener Bs -> Buscamos comerciantes BUY) ---
-async def comando_usdt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- COMANDO /venta (Quieres obtener Bs -> Vendes tus USDT) ---
+async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("⚠️ Envía el monto. Ejemplo: /usdt 100")
-        return
-    
-    try:
-        monto_usdt = float(context.args[0].replace(',', '.'))
-    except ValueError:
-        return
-
-    # Paso 1: Consultar sin monto para sacar un estimado
-    tasa_base = buscar_anuncio_binance(None, "BUY")
-    if not tasa_base:
-        await update.message.reply_text("❌ Error al conectar con Binance P2P.")
-        return
-        
-    monto_bs_estimado = monto_usdt * tasa_base['precio']
-    
-    # Paso 2: Consultar filtrando por los Bs exactos
-    anuncio = buscar_anuncio_binance(monto_bs_estimado, "BUY")
-    if not anuncio:
-        await update.message.reply_text(f"❌ No hay comerciantes que acepten límites para {formato_venezolano(monto_bs_estimado)} Bs.")
-        return
-
-    total_bs = monto_usdt * anuncio['precio']
-
-    mensaje = (
-        f"🟡 Monto: {formato_venezolano(monto_usdt, 2)} USDT\n"
-        f"📊 Tasa Exacta Binance: {formato_venezolano(anuncio['precio'], 4)} Bs\n"
-        f"👤 Comerciante: {anuncio['usuario']}\n"
-        f"🇻🇪 Recibes: {formato_venezolano(total_bs, 2)} Bs"
-    )
-    await update.message.reply_text(mensaje)
-
-# --- COMANDO /bs (Entregas Bs para comprar USDT -> Buscamos comerciantes SELL) ---
-async def comando_bs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Envía el monto. Ejemplo: /bs 2000000")
+        await update.message.reply_text("⚠️ Envía el monto en Bs que deseas obtener. Ejemplo: /venta 2000000")
         return
     
     try:
@@ -139,18 +104,46 @@ async def comando_bs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         return
 
-    anuncio = buscar_anuncio_binance(monto_bs, "SELL")
+    # Buscamos comerciantes BUY (ellos compran tus USDT a cambio de Bs)
+    anuncio = buscar_anuncio_binance(monto_bs, "BUY")
     if not anuncio:
-        await update.message.reply_text(f"❌ No hay comerciantes que acepten {formato_venezolano(monto_bs)} Bs en este momento.")
+        await update.message.reply_text(f"❌ No hay comerciantes (Comprando) que acepten {formato_venezolano(monto_bs)} Bs en este momento.")
         return
 
     total_usdt = monto_bs / anuncio['precio']
 
     mensaje = (
-        f"🇻🇪 Monto: {formato_venezolano(monto_bs, 2)} Bs\n"
+        f"🇻🇪 Quieres obtener: {formato_venezolano(monto_bs, 2)} Bs\n"
         f"📊 Tasa Exacta Binance: {formato_venezolano(anuncio['precio'], 4)} Bs\n"
         f"👤 Comerciante: {anuncio['usuario']}\n"
-        f"🟡 Recibes: {formato_venezolano(total_usdt, 2)} USDT"
+        f"🔴 Vendes: {formato_venezolano(total_usdt, 2)} USDT"
+    )
+    await update.message.reply_text(mensaje)
+
+# --- COMANDO /compra (Quieres gastar Bs -> Compras USDT) ---
+async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("⚠️ Envía el monto en Bs que deseas gastar. Ejemplo: /compra 2000000")
+        return
+    
+    try:
+        monto_bs = float(context.args[0].replace(',', '.'))
+    except ValueError:
+        return
+
+    # Buscamos comerciantes SELL (ellos te venden USDT a cambio de tus Bs)
+    anuncio = buscar_anuncio_binance(monto_bs, "SELL")
+    if not anuncio:
+        await update.message.reply_text(f"❌ No hay comerciantes (Vendiendo) que acepten {formato_venezolano(monto_bs)} Bs en este momento.")
+        return
+
+    total_usdt = monto_bs / anuncio['precio']
+
+    mensaje = (
+        f"🇻🇪 Inviertes: {formato_venezolano(monto_bs, 2)} Bs\n"
+        f"📊 Tasa Exacta Binance: {formato_venezolano(anuncio['precio'], 4)} Bs\n"
+        f"👤 Comerciante: {anuncio['usuario']}\n"
+        f"🟢 Recibes: {formato_venezolano(total_usdt, 2)} USDT"
     )
     await update.message.reply_text(mensaje)
 
@@ -165,8 +158,11 @@ def main():
     
     app = Application.builder().token(TOKEN).build()
     
-    app.add_handler(CommandHandler("usdt", comando_usdt))
-    app.add_handler(CommandHandler("bs", comando_bs))
+    # Registramos los nuevos comandos de compra y venta
+    app.add_handler(CommandHandler("venta", comando_venta))
+    app.add_handler(CommandHandler("compra", comando_compra))
+    
+    # Registramos los números sueltos para el BCV
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_mensaje))
     
     app.run_polling()
