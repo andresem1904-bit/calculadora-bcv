@@ -100,7 +100,7 @@ def formato_venezolano(numero, decimales=2):
 # --- COMANDOS DE ADMINISTRADOR ---
 async def comando_crearkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
-        return # Ignora si no eres tú
+        return 
     
     if not context.args:
         await update.message.reply_text("⚠️ Usa: /crearkey [cantidad_creditos]")
@@ -117,6 +117,24 @@ async def comando_crearkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Llave creada con éxito.\n\n🔑 `{codigo}`\n🪙 Créditos: {creditos}\n\nEnvía esta llave a tu cliente para que la canjee.", parse_mode="Markdown")
     except ValueError:
         await update.message.reply_text("❌ La cantidad debe ser un número entero.")
+
+async def comando_usuarios(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Solo tú puedes usar este comando
+    if update.message.from_user.id != ADMIN_ID:
+        return
+        
+    db = cargar_db()
+    usuarios = db.get("usuarios", {})
+    
+    if not usuarios:
+        await update.message.reply_text("📂 Aún no hay usuarios registrados en la base de datos.")
+        return
+        
+    mensaje = "📊 **REPORTE DE CLIENTES Y SALDOS**\n\n"
+    for uid, creditos in usuarios.items():
+        mensaje += f"👤 ID Telegram: `{uid}` ➔ 🪙 {creditos} créditos\n"
+        
+    await update.message.reply_text(mensaje, parse_mode="Markdown")
 
 # --- COMANDOS DE CLIENTE (CUENTA) ---
 async def comando_canjear(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -172,16 +190,13 @@ async def comando_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ejecutar_comando_protegido(update, operacion_func):
     user_id = update.message.from_user.id
     
-    # Excepción para el administrador (consultas ilimitadas)
     if user_id != ADMIN_ID:
         if not tiene_creditos(user_id):
             await update.message.reply_text(f"⚠️ No tienes créditos suficientes.\n\nContacta a {ADMIN_USERNAME} para adquirir una nueva llave o usa /canjear [LLAVE] si ya tienes una.")
             return
     
-    # Ejecuta el cálculo original
     exito = await operacion_func()
     
-    # Descuenta el crédito solo si el cálculo fue exitoso y no eres el admin
     if exito and user_id != ADMIN_ID:
         saldo_restante = descontar_credito(user_id)
         await update.message.reply_text(f"*(Te quedan {saldo_restante} créditos)*", parse_mode="Markdown")
@@ -291,6 +306,7 @@ def main():
     
     app.add_handler(CommandHandler("start", comando_start))
     app.add_handler(CommandHandler("crearkey", comando_crearkey))
+    app.add_handler(CommandHandler("usuarios", comando_usuarios)) # NUEVO COMANDO
     app.add_handler(CommandHandler("canjear", comando_canjear))
     app.add_handler(CommandHandler("perfil", comando_perfil))
     app.add_handler(CommandHandler("calcular", comando_calcular))
