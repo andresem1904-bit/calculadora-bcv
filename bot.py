@@ -10,10 +10,20 @@ from threading import Thread
 TOKEN = "8550226144:AAFlJ3-Twt_pVVmGC348fIVjp2XiUpzWE7c"
 # =====================
 
+# Lista de bancos con sus emojis y códigos internos de Binance
+BANCOS = {
+    "Banesco": {"code": "Banesco", "emoji": "🟢"},
+    "Banco de Venezuela": {"code": "BancodeVenezuela", "emoji": "🔴"},
+    "Mercantil": {"code": "Mercantil", "emoji": "🔵"},
+    "Provincial": {"code": "Provincial", "emoji": "🟦"},
+    "Bancamiga": {"code": "Bancamiga", "emoji": "🟣"},
+    "Banco Digital de los Trabajadores": {"code": "BancoBicentenario", "emoji": "🟠"}
+}
+
 app_web = Flask(__name__)
 @app_web.route('/')
 def home():
-    return "El bot del BCV y Binance (Compra/Venta) está funcionando 24/7."
+    return "El bot del BCV y Binance (Multibanco) está funcionando 24/7."
 
 def iniciar_servidor():
     puerto = int(os.environ.get("PORT", 8080))
@@ -32,8 +42,8 @@ def obtener_tasa_bcv():
     except Exception:
         return None
 
-def buscar_anuncio_binance(monto_fiat, tipo_operacion):
-    """Busca directamente en Binance filtrando por el monto exacto de Bs"""
+def buscar_anuncio_binance(monto_fiat, tipo_operacion, pay_type=None):
+    """Busca en Binance filtrando por monto y método de pago"""
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     headers = {
         "Content-Type": "application/json",
@@ -42,11 +52,11 @@ def buscar_anuncio_binance(monto_fiat, tipo_operacion):
     data = {
         "fiat": "VES",
         "page": 1,
-        "rows": 1, # Solo queremos el primer anuncio (el mejor)
-        "tradeType": tipo_operacion, # "BUY" o "SELL"
+        "rows": 1,
+        "tradeType": tipo_operacion,
         "asset": "USDT",
         "countries": [],
-        "payTypes": []
+        "payTypes": [pay_type] if pay_type else []
     }
     
     if monto_fiat:
@@ -69,7 +79,7 @@ def buscar_anuncio_binance(monto_fiat, tipo_operacion):
 def formato_venezolano(numero, decimales=2):
     return f"{numero:,.{decimales}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- CALCULADORA BCV (Mensajes normales sin comando) ---
+# --- CALCULADORA BCV ---
 async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip().replace(',', '.')
     try:
@@ -93,10 +103,10 @@ async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /venta (Apartado Rojo de Binance: Vendes tus USDT para obtener Bs) ---
+# --- COMANDO /venta (Vendes USDT -> Recibes Bs) ---
 async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("⚠️ Envía el monto en Bs que deseas obtener. Ejemplo: /venta 2000000")
+        await update.message.reply_text("⚠️ Envía el monto en Bs. Ejemplo: /venta 2000000")
         return
     
     try:
@@ -104,26 +114,31 @@ async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         return
 
-    # Usamos SELL para buscar en la pestaña de Venta de Binance
-    anuncio = buscar_anuncio_binance(monto_bs, "SELL")
-    if not anuncio:
-        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en este momento.")
+    mensaje_lineas = [
+        f"🇻🇪 Quieres obtener: {formato_venezolano(monto_bs, 2)} Bs",
+        "📊 Tasa Exacta Binance en:"
+    ]
+
+    encontro_alguno = False
+    for nombre_banco, info in BANCOS.items():
+        anuncio = buscar_anuncio_binance(monto_bs, "SELL", info["code"])
+        if anuncio:
+            encontro_alguno = True
+            total_usdt = monto_bs / anuncio['precio']
+            mensaje_lineas.append(
+                f"{info['emoji']} {nombre_banco}: {formato_venezolano(anuncio['precio'], 4)} Bs / 👤 {anuncio['usuario']} / 🔴 Vendes: {formato_venezolano(total_usdt, 2)} USDT"
+            )
+
+    if not encontro_alguno:
+        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en estos bancos.")
         return
 
-    total_usdt = monto_bs / anuncio['precio']
+    await update.message.reply_text("\n".join(mensaje_lineas))
 
-    mensaje = (
-        f"🇻🇪 Quieres obtener: {formato_venezolano(monto_bs, 2)} Bs\n"
-        f"📊 Tasa Exacta Binance: {formato_venezolano(anuncio['precio'], 4)} Bs\n"
-        f"👤 Comerciante: {anuncio['usuario']}\n"
-        f"🔴 Vendes: {formato_venezolano(total_usdt, 2)} USDT"
-    )
-    await update.message.reply_text(mensaje)
-
-# --- COMANDO /compra (Apartado Verde de Binance: Gastas Bs para comprar USDT) ---
+# --- COMANDO /compra (Compras USDT -> Pagas Bs) ---
 async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("⚠️ Envía el monto en Bs que deseas gastar. Ejemplo: /compra 2000000")
+        await update.message.reply_text("⚠️ Envía el monto en Bs. Ejemplo: /compra 2000000")
         return
     
     try:
@@ -131,21 +146,26 @@ async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         return
 
-    # Usamos BUY para buscar en la pestaña de Compra de Binance
-    anuncio = buscar_anuncio_binance(monto_bs, "BUY")
-    if not anuncio:
-        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en este momento.")
+    mensaje_lineas = [
+        f"🇻🇪 Inviertes: {formato_venezolano(monto_bs, 2)} Bs",
+        "📊 Tasa Exacta Binance en:"
+    ]
+
+    encontro_alguno = False
+    for nombre_banco, info in BANCOS.items():
+        anuncio = buscar_anuncio_binance(monto_bs, "BUY", info["code"])
+        if anuncio:
+            encontro_alguno = True
+            total_usdt = monto_bs / anuncio['precio']
+            mensaje_lineas.append(
+                f"{info['emoji']} {nombre_banco}: {formato_venezolano(anuncio['precio'], 4)} Bs / 👤 {anuncio['usuario']} / 🟢 Recibes: {formato_venezolano(total_usdt, 2)} USDT"
+            )
+
+    if not encontro_alguno:
+        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en estos bancos.")
         return
 
-    total_usdt = monto_bs / anuncio['precio']
-
-    mensaje = (
-        f"🇻🇪 Inviertes: {formato_venezolano(monto_bs, 2)} Bs\n"
-        f"📊 Tasa Exacta Binance: {formato_venezolano(anuncio['precio'], 4)} Bs\n"
-        f"👤 Comerciante: {anuncio['usuario']}\n"
-        f"🟢 Recibes: {formato_venezolano(total_usdt, 2)} USDT"
-    )
-    await update.message.reply_text(mensaje)
+    await update.message.reply_text("\n".join(mensaje_lineas))
 
 def main():
     mantener_vivo()
