@@ -93,7 +93,7 @@ async def procesar_mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /venta (Quieres obtener Bs -> Vendes tus USDT) ---
+# --- COMANDO /venta (Apartado Rojo de Binance: Vendes tus USDT para obtener Bs) ---
 async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en Bs que deseas obtener. Ejemplo: /venta 2000000")
@@ -104,10 +104,10 @@ async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         return
 
-    # Buscamos comerciantes BUY (ellos compran tus USDT a cambio de Bs)
-    anuncio = buscar_anuncio_binance(monto_bs, "BUY")
+    # Usamos SELL para buscar en la pestaña de Venta de Binance
+    anuncio = buscar_anuncio_binance(monto_bs, "SELL")
     if not anuncio:
-        await update.message.reply_text(f"❌ No hay comerciantes (Comprando) que acepten {formato_venezolano(monto_bs)} Bs en este momento.")
+        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en este momento.")
         return
 
     total_usdt = monto_bs / anuncio['precio']
@@ -120,7 +120,7 @@ async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /compra (Quieres gastar Bs -> Compras USDT) ---
+# --- COMANDO /compra (Apartado Verde de Binance: Gastas Bs para comprar USDT) ---
 async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en Bs que deseas gastar. Ejemplo: /compra 2000000")
@@ -131,10 +131,10 @@ async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         return
 
-    # Buscamos comerciantes SELL (ellos te venden USDT a cambio de tus Bs)
-    anuncio = buscar_anuncio_binance(monto_bs, "SELL")
+    # Usamos BUY para buscar en la pestaña de Compra de Binance
+    anuncio = buscar_anuncio_binance(monto_bs, "BUY")
     if not anuncio:
-        await update.message.reply_text(f"❌ No hay comerciantes (Vendiendo) que acepten {formato_venezolano(monto_bs)} Bs en este momento.")
+        await update.message.reply_text(f"❌ No hay anuncios disponibles para {formato_venezolano(monto_bs)} Bs en este momento.")
         return
 
     total_usdt = monto_bs / anuncio['precio']
@@ -158,11 +158,8 @@ def main():
     
     app = Application.builder().token(TOKEN).build()
     
-    # Registramos los nuevos comandos de compra y venta
     app.add_handler(CommandHandler("venta", comando_venta))
     app.add_handler(CommandHandler("compra", comando_compra))
-    
-    # Registramos los números sueltos para el BCV
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_mensaje))
     
     app.run_polling()
