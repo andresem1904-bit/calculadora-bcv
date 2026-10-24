@@ -12,6 +12,7 @@ from threading import Thread
 # === CONFIGURACIÓN ===
 TOKEN = "8550226144:AAFlJ3-Twt_pVVmGC348fIVjp2XiUpzWE7c"
 ADMIN_ID = 7060767981
+ADMIN_USERNAME = "@Sjw0518"
 DB_FILE = "datos.json"
 # =====================
 
@@ -174,7 +175,7 @@ async def ejecutar_comando_protegido(update, operacion_func):
     # Excepción para el administrador (consultas ilimitadas)
     if user_id != ADMIN_ID:
         if not tiene_creditos(user_id):
-            await update.message.reply_text("⚠️ No tienes créditos suficientes. Contacta al administrador para adquirir una nueva llave o usa /canjear [LLAVE].")
+            await update.message.reply_text(f"⚠️ No tienes créditos suficientes.\n\nContacta a {ADMIN_USERNAME} para adquirir una nueva llave o usa /canjear [LLAVE] si ya tienes una.")
             return
     
     # Ejecuta el cálculo original
