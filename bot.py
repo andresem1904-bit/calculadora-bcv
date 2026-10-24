@@ -23,7 +23,7 @@ BANCOS = {
 app_web = Flask(__name__)
 @app_web.route('/')
 def home():
-    return "El bot del BCV y Binance (Multibanco y Comandos) está funcionando 24/7."
+    return "El bot del BCV y Binance (Con Menú) está funcionando 24/7."
 
 def iniciar_servidor():
     puerto = int(os.environ.get("PORT", 8080))
@@ -78,7 +78,21 @@ def buscar_anuncio_binance(monto_fiat, tipo_operacion, pay_type=None):
 def formato_venezolano(numero, decimales=2):
     return f"{numero:,.{decimales}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- COMANDO /calcular (Quieres comprar $ -> Ingresas $) ---
+# --- COMANDO /start (Bienvenida y Guía) ---
+async def comando_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mensaje = (
+        "👋 ¡Hola! Soy tu calculadora financiera del BCV y Binance P2P.\n\n"
+        "👇 Estos son los comandos que puedes utilizar:\n\n"
+        "🏛 BCV (Tasa Oficial + 0,5%)\n"
+        "🔹 /calcular [monto] - Saber cuántos Bs necesitas para comprar $.\n"
+        "🔹 /bolivares [monto] - Saber cuántos $ te alcanzan con tus Bs disponibles.\n\n"
+        "💱 BINANCE P2P (Mejor tasa Multibanco)\n"
+        "🔹 /venta [monto] - Busco quién te da más Bs por tus USDT.\n"
+        "🔹 /compra [monto] - Busco quién te pide menos Bs por darte USDT."
+    )
+    await update.message.reply_text(mensaje)
+
+# --- COMANDO /calcular ---
 async def comando_calcular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en $. Ejemplo: /calcular 500")
@@ -105,7 +119,7 @@ async def comando_calcular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /bolivares (Tienes Bs -> Quieres saber cuántos $ alcanzan) ---
+# --- COMANDO /bolivares ---
 async def comando_bolivares(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en Bs. Ejemplo: /bolivares 40000")
@@ -132,7 +146,7 @@ async def comando_bolivares(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(mensaje)
 
-# --- COMANDO /venta (Vendes USDT -> Recibes Bs) ---
+# --- COMANDO /venta ---
 async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en Bs. Ejemplo: /venta 2000000")
@@ -177,7 +191,7 @@ async def comando_venta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n".join(mensaje_lineas))
 
-# --- COMANDO /compra (Compras USDT -> Pagas Bs) ---
+# --- COMANDO /compra ---
 async def comando_compra(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("⚠️ Envía el monto en Bs. Ejemplo: /compra 2000000")
@@ -233,11 +247,12 @@ def main():
     
     app = Application.builder().token(TOKEN).build()
     
-    # Comandos del BCV actualizados
+    # Registramos el nuevo comando start
+    app.add_handler(CommandHandler("start", comando_start))
+    
+    # Comandos operativos
     app.add_handler(CommandHandler("calcular", comando_calcular))
     app.add_handler(CommandHandler("bolivares", comando_bolivares))
-    
-    # Comandos de Binance
     app.add_handler(CommandHandler("venta", comando_venta))
     app.add_handler(CommandHandler("compra", comando_compra))
     
